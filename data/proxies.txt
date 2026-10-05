@@ -1,0 +1,4 @@
+# Egress proxy list (format: protocol://user:pass@host:port)
+# Examples:
+# http://user:pass@pr.residential.io:7777
+# socks5://127.0.0.1:9050
