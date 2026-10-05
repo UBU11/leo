@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Export Engine — Lead Review Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-6">
+  <div class="max-w-6xl mx-auto">
+    <header class="flex justify-between items-center mb-8 border-b border-slate-700 pb-4">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">Export Engine Lead Review</h1>
+        <p class="text-sm text-slate-400">Human-in-the-Loop Approval Queue (Pending Dispatches)</p>
+      </div>
+      <div class="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700">
+        <span class="text-xs uppercase text-slate-400 font-semibold">Pending Approval:</span>
+        <span class="ml-2 text-lg font-bold text-emerald-400">{{ leads|length }}</span>
+      </div>
+    </header>
+
+    {% if not leads %}
+      <div class="text-center py-20 bg-slate-800/40 rounded-xl border border-slate-800">
+        <p class="text-slate-400 text-lg">No leads currently waiting for approval.</p>
+        <p class="text-slate-500 text-sm mt-1">Run the scraper and classifier pipeline to populate the queue.</p>
+      </div>
+    {% else %}
+      <div class="space-y-6">
+        {% for lead in leads %}
+          <div class="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-sm">
+            <div class="flex flex-wrap justify-between items-start gap-4 border-b border-slate-700 pb-4 mb-4">
+              <div>
+                <div class="flex items-center gap-3">
+                  <h2 class="text-xl font-bold text-white">{{ lead.brand_name or lead.domain }}</h2>
+                  <span class="px-2 py-0.5 text-xs rounded bg-slate-700 text-slate-300 font-mono">{{ lead.country or 'OTHER' }}</span>
+                  <span class="px-2 py-0.5 text-xs rounded bg-indigo-900/60 text-indigo-300 border border-indigo-700">{{ lead.brand_tier or 'UNKNOWN' }}</span>
+                </div>
+                <div class="text-sm text-slate-400 mt-1 flex gap-4">
+                  <a href="https://{{ lead.domain }}" target="_blank" class="hover:text-blue-400 underline">{{ lead.domain }}</a>
+                  {% if lead.contact_name or lead.contact_email %}
+                    <span>Contact: {{ lead.contact_name or 'N/A' }} &lt;{{ lead.contact_email or 'no email' }}&gt;</span>
+                  {% endif %}
+                </div>
+              </div>
+
+              {% if lead.instagram_handle %}
+                <a href="https://instagram.com/{{ lead.instagram_handle }}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-900/40 hover:bg-pink-800/60 border border-pink-700/50 text-pink-300 text-sm">
+                  <span>@{{ lead.instagram_handle }}</span>
+                </a>
+              {% endif %}
+            </div>
+
+            <!-- Extracted Garment Parameters -->
+            <div class="grid grid-cols-3 gap-4 mb-6 bg-slate-900/60 p-4 rounded-lg text-sm border border-slate-750">
+              <div>
+                <span class="text-slate-400 block text-xs">Detected GSM</span>
+                <span class="font-medium text-slate-200">{{ lead.detected_gsm or 'Not detected' }}</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-xs">Fabric Construction</span>
+                <span class="font-medium text-slate-200">{{ lead.fabric_construction or 'Unspecified' }}</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-xs">Fit & Style</span>
+                <span class="font-medium text-slate-200">{{ lead.fit_style or 'Unspecified' }}</span>
+              </div>
+            </div>
+
+            <!-- Edit & Approval Form -->
+            <form method="POST" action="/leads/{{ lead.id }}/approve" class="space-y-4">
+              <div>
+                <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Subject Line</label>
+                <input type="text" name="generated_subject" value="{{ lead.generated_subject or 'quick question - ' + (lead.contact_name or lead.brand_name or '') }}" required
+                       class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500">
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Pitch / Email Body (Strictly Plain-Text)</label>
+                <textarea name="generated_pitch" rows="5" required
+                          class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-100 font-mono focus:outline-none focus:border-blue-500">{{ lead.generated_pitch or '' }}</textarea>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Operator Notes</label>
+                <input type="text" name="operator_notes" value="{{ lead.operator_notes or '' }}" placeholder="Optional notes or audit trail"
+                       class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-300">
+              </div>
+
+              <div class="flex justify-end gap-3 pt-2">
+                <button type="submit" formaction="/leads/{{ lead.id }}/reject" formmethod="POST"
+                        class="px-4 py-2 rounded-lg border border-rose-800 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 text-sm font-semibold transition">
+                  Reject
+                </button>
+                <button type="submit"
+                        class="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition shadow-sm">
+                  Approve for Dispatch
+                </button>
+              </div>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</body>
+</html>

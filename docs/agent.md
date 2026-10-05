@@ -1,8 +1,5 @@
-Save the following content as `AGENT.md` in the root of your repository to instruct AI agents (such as Cursor, Windsurf, or Claude Code) on building and maintaining this pipeline with production-grade constraints.
 
----
-
-# AGENT.md: Autonomous B2B Apparel Export Pipeline
+# Autonomous B2B Apparel Export Pipeline
 
 ## 1. System Mission & Operational Context
 
