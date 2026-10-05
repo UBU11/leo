@@ -40,3 +40,9 @@ data/*.db-shm
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+
+# Agent & principle specifications
+AGENT.md
+docs/agent.md
+docs/principle.md
+
