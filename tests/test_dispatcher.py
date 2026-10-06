@@ -1,9 +1,12 @@
 import sqlite3
 from datetime import datetime, timezone
 
+from unittest.mock import patch
+
 from src.database.models import SCHEMA_SQL, is_valid_transition
 from src.dispatcher.scheduler import get_next_eligible_lead, is_within_business_hours
-from src.dispatcher.smtp_client import build_subject
+from src.dispatcher.smtp_client import build_subject, count_emails_sent_last_24h, dispatch_next_approved_lead
+
 
 
 def test_build_subject_variants():
@@ -69,4 +72,35 @@ def test_get_next_eligible_lead_timezone_skipping():
     lead = get_next_eligible_lead(conn, current_dt=eval_dt)
     assert lead is not None
     assert lead["domain"] == "us-brand.com"
+
+
+def test_dispatch_next_approved_lead_integrates_timezone():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(SCHEMA_SQL)
+
+    with conn:
+        conn.execute(
+            """
+            INSERT INTO leads (domain, country, contact_name, contact_email, status, generated_subject, generated_pitch)
+            VALUES ('au-brand.com', 'AU', 'Mate', 'mate@au-brand.com', 'approved', 'AU Subject', 'Pitch'),
+                   ('us-brand.com', 'US', 'John', 'john@us-brand.com', 'approved', 'US Subject', 'Pitch')
+            """
+        )
+
+    eval_dt = datetime(2026, 10, 5, 15, 0, tzinfo=timezone.utc)
+    with patch("src.dispatcher.smtp_client.send_plain_text_email") as mock_send, \
+         patch("time.sleep"):
+        dispatched = dispatch_next_approved_lead(conn=conn, current_dt=eval_dt)
+
+        assert dispatched is True
+        mock_send.assert_called_once_with(to_email="john@us-brand.com", subject="US Subject", body="Pitch")
+
+        au_row = conn.execute("SELECT status, sent_at FROM leads WHERE domain = 'au-brand.com'").fetchone()
+        us_row = conn.execute("SELECT status, sent_at FROM leads WHERE domain = 'us-brand.com'").fetchone()
+        assert au_row["status"] == "approved"
+        assert au_row["sent_at"] is None
+        assert us_row["status"] == "sent"
+        assert us_row["sent_at"] is not None
+
 

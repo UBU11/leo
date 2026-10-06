@@ -1,12 +1,16 @@
+from contextlib import contextmanager
+from datetime import datetime
 from email.mime.text import MIMEText
 import random
 import smtplib
 import ssl
+import sqlite3
 import time
-from typing import Optional
+from typing import Generator, Optional
 
 from src.config import get_settings
 from src.database.connection import get_db_connection
+from src.dispatcher.scheduler import get_next_eligible_lead
 
 
 def build_subject(contact_name: Optional[str], brand_name: Optional[str]) -> str:
@@ -39,10 +43,19 @@ def send_plain_text_email(
         server.send_message(msg)
 
 
-def count_emails_sent_last_24h() -> int:
+@contextmanager
+def _active_connection(conn: Optional[sqlite3.Connection] = None) -> Generator[sqlite3.Connection, None, None]:
+    if conn is not None:
+        yield conn
+        return
     settings = get_settings()
-    with get_db_connection(settings.database_path) as conn:
-        row = conn.execute(
+    with get_db_connection(settings.database_path) as active_conn:
+        yield active_conn
+
+
+def count_emails_sent_last_24h(conn: Optional[sqlite3.Connection] = None) -> int:
+    with _active_connection(conn) as active_conn:
+        row = active_conn.execute(
             """
             SELECT COUNT(*) as sent_count 
             FROM leads 
@@ -52,34 +65,33 @@ def count_emails_sent_last_24h() -> int:
         return row["sent_count"] if row else 0
 
 
-def dispatch_next_approved_lead() -> bool:
+def dispatch_next_approved_lead(
+    conn: Optional[sqlite3.Connection] = None,
+    current_dt: Optional[datetime] = None,
+) -> bool:
     settings = get_settings()
 
-    if count_emails_sent_last_24h() >= settings.dispatch_daily_limit:
-        print("[DISPATCHER] Daily sending limit reached (25/24h). Pausing.")
-        return False
+    with _active_connection(conn) as active_conn:
+        if count_emails_sent_last_24h(active_conn) >= settings.dispatch_daily_limit:
+            print("[DISPATCHER] Daily sending limit reached (25/24h). Pausing.")
+            return False
 
-    with get_db_connection(settings.database_path) as conn:
-        lead = conn.execute(
-            """
-            SELECT id, domain, brand_name, contact_name, contact_email, 
-                   generated_subject, generated_pitch 
-            FROM leads 
-            WHERE status = 'approved' AND sent_at IS NULL 
-            ORDER BY id ASC LIMIT 1
-            """
-        ).fetchone()
-
+        lead = get_next_eligible_lead(active_conn, current_dt)
         if not lead:
             return False
 
         lead_id = lead["id"]
         to_email = lead["contact_email"]
         if not to_email:
-            conn.execute(
-                "UPDATE leads SET status = 'failed', error_log = 'Missing contact_email' WHERE id = ?",
+            active_conn.execute(
+                """
+                UPDATE leads 
+                SET status = 'failed', error_log = 'Missing contact_email', updated_at = CURRENT_TIMESTAMP 
+                WHERE id = ?
+                """,
                 (lead_id,),
             )
+            active_conn.commit()
             return True
 
         subject = lead["generated_subject"] or build_subject(lead["contact_name"], lead["brand_name"])
@@ -87,7 +99,7 @@ def dispatch_next_approved_lead() -> bool:
 
         try:
             send_plain_text_email(to_email=to_email, subject=subject, body=body)
-            conn.execute(
+            active_conn.execute(
                 """
                 UPDATE leads 
                 SET status = 'sent', sent_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
@@ -95,13 +107,14 @@ def dispatch_next_approved_lead() -> bool:
                 """,
                 (lead_id,),
             )
+            active_conn.commit()
             print(f"[DISPATCHER] Sent email to {to_email} ({lead['domain']})")
 
             delay = random.uniform(settings.dispatch_min_delay_seconds, settings.dispatch_max_delay_seconds)
             print(f"[DISPATCHER] Enforcing randomized jitter delay of {delay:.1f}s")
             time.sleep(delay)
         except (smtplib.SMTPAuthenticationError, smtplib.SMTPDataError, smtplib.SMTPException, OSError) as exc:
-            conn.execute(
+            active_conn.execute(
                 """
                 UPDATE leads 
                 SET status = 'failed', error_log = ?, updated_at = CURRENT_TIMESTAMP 
@@ -109,9 +122,10 @@ def dispatch_next_approved_lead() -> bool:
                 """,
                 (str(exc), lead_id),
             )
+            active_conn.commit()
             print(f"[DISPATCHER] Failed sending to {to_email}: {exc}")
 
-    return True
+        return True
 
 
 def run_dispatcher_loop(poll_interval: float = 30.0, once: bool = False) -> None:
