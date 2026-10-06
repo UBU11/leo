@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from src.database.models import SCHEMA_SQL, is_valid_transition
 from src.dispatcher.scheduler import get_next_eligible_lead, is_within_business_hours
-from src.dispatcher.smtp_client import build_subject, count_emails_sent_last_24h, dispatch_next_approved_lead
+from src.dispatcher.smtp_client import build_subject, dispatch_next_approved_lead
 
 
 
