@@ -10,7 +10,7 @@ install:
 	uv sync --extra dev
 
 test:
-	pytest -v
+	uv run pytest -v
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
