@@ -1,1 +1,3 @@
-"""Lead ingestion and seed pipelines."""
+from .loader import SeedLoader
+
+__all__ = ["SeedLoader"]

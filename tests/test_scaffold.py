@@ -23,3 +23,21 @@ def test_domain_models():
 def test_settings_load():
     settings = Settings()
     assert settings.app_env in ["development", "production", "test"]
+
+
+def test_protocol_interfaces_exist():
+    from typing import Protocol
+    from src.database.repository import LeadRepository
+    from src.ingest.loader import SeedLoader
+    from src.scraper.crawler import StoreCrawler
+    from src.classifier.analyzer import BrandAnalyzer
+    from src.dispatcher.sender import OutboundSender
+    from src.web.server import ReviewServer
+
+    assert issubclass(LeadRepository, Protocol)
+    assert issubclass(SeedLoader, Protocol)
+    assert issubclass(StoreCrawler, Protocol)
+    assert issubclass(BrandAnalyzer, Protocol)
+    assert issubclass(OutboundSender, Protocol)
+    assert issubclass(ReviewServer, Protocol)
+

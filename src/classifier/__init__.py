@@ -1,1 +1,3 @@
-"""Two-system classification and garment analysis engine."""
+from .analyzer import BrandAnalyzer
+
+__all__ = ["BrandAnalyzer"]

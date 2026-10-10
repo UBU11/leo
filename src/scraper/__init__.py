@@ -1,1 +1,3 @@
-"""Web scraper and DOM pruning pipelines."""
+from .crawler import StoreCrawler
+
+__all__ = ["StoreCrawler"]

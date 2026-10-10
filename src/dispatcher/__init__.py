@@ -1,1 +1,3 @@
-"""Outbound plain-text SMTP dispatcher and delivery scheduler."""
+from .sender import OutboundSender
+
+__all__ = ["OutboundSender"]
